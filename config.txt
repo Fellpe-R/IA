@@ -1,12 +1,12 @@
 
 [NEAT]
 fitness_criterion     = max
-fitness_threshold     = 1000
-pop_size              = 100
-reset_on_extinction   = False
+fitness_threshold     = 40
+pop_size              = 13
+reset_on_extinction   = True
 
 [DefaultGenome]
-#passa calculos que devem 
+#passa calculos que devem
 # node activation options
 activation_default      = tanh
 activation_mutate_rate  = 0.0

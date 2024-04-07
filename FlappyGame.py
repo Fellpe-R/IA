@@ -256,7 +256,7 @@ def main(genomas, config):
                     persons.pop(i)
                     if aiPlay:
                         lGenomas[i].fitness -= 1
-                        lGenomas.pop(1)
+                        lGenomas.pop(i)
                         redes.pop(i)
                 if not cano.passou and person.x > cano.x:
                     cano.passou = True
