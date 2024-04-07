@@ -1,6 +1,10 @@
 import pygame
 import os
 import random
+import neat
+
+aiPlay = True
+generation = 0
 
 TELA_LARGURA = 500
 TELA_ALTURA = 800
@@ -159,10 +163,10 @@ class Base:
         self.x1 -= self.VEL
         self.x2 -= self.VEL
 
-        if self.x1 + self.LARG < 0:
-            self.x1 = self.x1 + self.LARG
-        if self.x2 + self.LARG < 0:
-            self.x2 = self.x2 + self.LARG
+        if self.x1 + self.LARG <= 0:
+            self.x1 = self.x2 + self.LARG #self.y #self.x1 + self.LARG
+        if self.x2 + self.LARG <= 0:
+            self.x2 = self.x1 + self.LARG
 
     def print(self, tela):
         tela.blit(self.IMG, (self.x1, self.y))
@@ -178,12 +182,31 @@ def screen(tela, persons, canos, base, pontos):
 
     texto = FONTE_PONTOS.render(f"pontuação: {pontos}", 1, (255, 255, 255))
     tela.blit(texto, (TELA_LARGURA - 10 - texto.get_width(), 10))
+
+    if aiPlay:
+        texto = FONTE_PONTOS.render(f"Geração: {generation}", 1, (255, 255, 255))
+        tela.blit(texto, (10, 10))
+
     base.print(tela)
     pygame.display.update()
 
 
-def main():
-    persons = [Person(230, 350)]
+def main(genomas, config):
+    global generation
+    generation += 1
+
+    if aiPlay:
+        redes = []
+        lGenomas = []
+        persons = []
+        for _, genoma in genomas:
+            rede = neat.nn.FeedForwardNetwork.create(genoma, config)
+            redes.append(rede)
+            genoma.fitness = 0
+            lGenomas.append(genoma)
+            persons.append(Person(230, 350))
+    else:
+        persons = [Person(230, 350)]
     base = Base(730)
     canos = [Cano(700)]
     tela = pygame.display.set_mode((TELA_LARGURA, TELA_ALTURA))
@@ -200,14 +223,28 @@ def main():
                 run = False
                 pygame.quit()
                 quit()
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE:
-                    for person in persons:
-                        person.jump()
+            if not aiPlay:
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_SPACE:
+                        for person in persons:
+                            person.jump()
+
+        indiceCano=0
+        if len(persons) > 0:
+            if len(canos) > 1 and persons[0].x > (canos[0].x + canos[0].CANOTOP.get_width()):
+                indiceCano = 1
+        else:
+            run = False
+            break
 
         # Movimentação do ambiente
-        for person in persons:
+        for i, person in enumerate(persons):
             person.move()
+            lGenomas[i].fitness += 0.1
+            output = redes[i].activate((person.y, abs(person.y - canos[indiceCano].alt), abs(person.y - canos[indiceCano].posBase)))
+            #-1 e 1 -> se output > 0.5 passaro pula
+            if output[0] > 0.5:
+                person.jump()
         base.move()
 
         addCano = False
@@ -217,10 +254,13 @@ def main():
             for i, person, in enumerate(persons):
                 if cano.colisao(person):
                     persons.pop(i)
+                    if aiPlay:
+                        lGenomas[i].fitness -= 1
+                        lGenomas.pop(1)
+                        redes.pop(i)
                 if not cano.passou and person.x > cano.x:
                     cano.passou = True
                     addCano = True
-
             cano.move()
 
             if cano.x + cano.CANOTOP.get_width() < 0:
@@ -229,16 +269,37 @@ def main():
         if addCano:
             pontos += 1
             canos.append(Cano(600))
-
+            for genoma in lGenomas:
+                genoma.fitness +=5
         for cano in rmCanos:
             canos.remove(cano)
 
         for i, person in enumerate(persons):
             if (person.y + person.img.get_height()) > base.y or person.y < 0:
                 persons.pop(i)
+                if aiPlay:
+                    lGenomas.pop(i)
+                    redes.pop(i)
 
         screen(tela, persons, canos, base, pontos)
 
+def rodar(caminho_config):
+    config = neat.config.Config(neat.DefaultGenome,
+                                neat.DefaultReproduction,
+                                neat.DefaultSpeciesSet,
+                                neat.DefaultStagnation,
+                                caminho_config)
+
+    populacao = neat.Population(config)
+    populacao.add_reporter(neat.StdOutReporter(True))
+    populacao.add_reporter(neat.StatisticsReporter())
+
+    if aiPlay:
+        populacao.run(main, 50)
+    else:
+        main(None, None)
 
 if __name__ == '__main__':
-    main()
+    caminho = os.path.dirname(__file__)
+    caminhoConfig = os.path.join(caminho, 'config.txt')
+    rodar(caminhoConfig)
